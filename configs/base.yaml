@@ -1,0 +1,6 @@
+exp_name: CLIP-last-layer
+model_name: ViT-B/32
+num_epochs: 1
+batch_size: 16
+learning_rate: 1e-5
+context_length: 512

@@ -253,10 +253,11 @@ class CLIP(nn.Module):
                  vocab_size: int,
                  transformer_width: int,
                  transformer_heads: int,
-                 transformer_layers: int
+                 transformer_layers: int,
+                 increased_context_length: int = 512
                  ):
         super().__init__()
-
+        self.increased_context_length = increased_context_length
         self.context_length = context_length
 
         if isinstance(vision_layers, (tuple, list)):
@@ -295,6 +296,9 @@ class CLIP(nn.Module):
         self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
 
         self.initialize_parameters()
+    
+    def set_increased_context_length(self, increased_context_length):
+        self.increased_context_length = increased_context_length
 
     def initialize_parameters(self):
         nn.init.normal_(self.token_embedding.weight, std=0.02)
@@ -328,7 +332,7 @@ class CLIP(nn.Module):
     def build_attention_mask(self):
         # lazily create causal attention mask, with full attention between the vision tokens
         # pytorch uses additive attention mask; fill with -inf
-        mask = torch.empty(self.context_length, self.context_length)
+        mask = torch.empty(self.increased_context_length, self.increased_context_length)
         mask.fill_(float("-inf"))
         mask.triu_(1)  # zero out the lower diagonal
         return mask
@@ -340,9 +344,29 @@ class CLIP(nn.Module):
     def encode_image(self, image):
         return self.visual(image.type(self.dtype))
 
-    def encode_text(self, text):
-        x = self.token_embedding(text).type(self.dtype)  # [batch_size, n_ctx, d_model]
+    def positional_interpolation(self):
+        N = self.increased_context_length
+        C = self.context_length - 1
 
+        new_positional_embedding = torch.empty(N, self.transformer.width)
+
+        # Linearly interpolate the small self.positional_embedding matrix from (C, d_model) to (N, d_model)
+        for i in range(N):
+            left = (i*C)//N
+            right = int(np.ceil(i*C/N))
+            
+            right_importance = (i*C/N) - left
+
+            new_positional_embedding[i] = self.positional_embedding[left] * (1 - right_importance) + self.positional_embedding[right] * right_importance
+
+        self.positional_embedding = nn.Parameter(new_positional_embedding)
+        self.positional_embedding.requires_grad = False
+
+    def encode_text(self, text):
+        if self.positional_embedding.shape[0] != self.increased_context_length:
+            self.positional_interpolation()
+
+        x = self.token_embedding(text).type(self.dtype)  # [batch_size, n_ctx, d_model]
         x = x + self.positional_embedding.type(self.dtype)
         x = x.permute(1, 0, 2)  # NLD -> LND
         x = self.transformer(x)
