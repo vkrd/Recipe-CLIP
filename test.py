@@ -10,7 +10,7 @@ from tqdm import tqdm
 if __name__ == "__main__":
     # Config that should only change once
     DATA_PATH = "/Users/vikram/Documents/CMU/Multimodal/MultimodalRecipeProject/data/"
-
+    DEBUG = True
 
     # Load config
     if len(sys.argv) != 2:
@@ -26,8 +26,13 @@ if __name__ == "__main__":
     last_model = sorted(os.listdir(DATA_PATH + "checkpoints/" + config.exp_name))[-1]
     model_path = DATA_PATH + "checkpoints/" + config.exp_name + "/" + last_model
     print("Loading from '" + model_path + "'")
+
+    model, preprocess = clip.load(config.model_name, device = device)
+    model.set_increased_context_length(config.context_length)
+    model.prep_for_finetuning()
     
-    model, preprocess = clip.load(model_path, device = device)
+    
+    model.load_state_dict(torch.load(model_path))
     model.eval()
 
     test_dataset = RecipeDataset(df, split = "test", device = device, data_path = DATA_PATH, context_length = config.context_length, image_preprocessor = preprocess)
@@ -48,8 +53,9 @@ if __name__ == "__main__":
         image_loss = criteron(logits_per_image, labels)
         text_loss = criteron(logits_per_text, labels)
 
-        loss = (image_loss + text_loss)/2
+        loss += ((image_loss + text_loss)/2).item()
 
-        loss += torch.nn.functional.cosine_similarity(image_features, text_features).mean().item()
+        if DEBUG:
+            break
 
     print("Test loss:", loss/len(test_dataloader))

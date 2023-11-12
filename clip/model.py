@@ -300,6 +300,9 @@ class CLIP(nn.Module):
     def set_increased_context_length(self, increased_context_length):
         self.increased_context_length = increased_context_length
 
+    def prep_for_finetuning(self):
+        self.positional_embedding = nn.Parameter(torch.empty(self.increased_context_length, self.transformer.width))
+
     def initialize_parameters(self):
         nn.init.normal_(self.token_embedding.weight, std=0.02)
         nn.init.normal_(self.positional_embedding, std=0.01)

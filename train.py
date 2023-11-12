@@ -11,6 +11,7 @@ if __name__ == "__main__":
     # Config that should only change once
     DATA_PATH = "/Users/vikram/Documents/CMU/Multimodal/MultimodalRecipeProject/data/"
     USE_WANDB = True
+    DEBUG = True
 
 
     # Load config
@@ -40,7 +41,8 @@ if __name__ == "__main__":
     # Load data
     df = pd.read_csv(DATA_PATH  + "preprocessed_data/data.csv")
 
-    train_dataset = RecipeDataset(df, split = "val", device = device, data_path = DATA_PATH, context_length = config.context_length, image_preprocessor = preprocess)
+    train_split = "val" if DEBUG else "train"
+    train_dataset = RecipeDataset(df, split = train_split, device = device, data_path = DATA_PATH, context_length = config.context_length, image_preprocessor = preprocess)
     train_dataloader = DataLoader(train_dataset, batch_size = config.batch_size, shuffle = True)
 
     val_dataset = RecipeDataset(df, split = "val", device = device, data_path = DATA_PATH, context_length = config.context_length, image_preprocessor = preprocess)
@@ -72,7 +74,8 @@ if __name__ == "__main__":
             loss.backward()
             optimizer.step()
             running_loss += loss.item()
-            break
+            if DEBUG:
+                break
         
         print("Evaluating on validation set")
         val_loss = 0.0
@@ -89,7 +92,8 @@ if __name__ == "__main__":
 
                 loss = (image_loss + text_loss)/2
                 val_loss += loss.item()
-                break
+                if DEBUG:
+                    break
 
 
         print("Train Loss:", running_loss/len(train_dataloader))
